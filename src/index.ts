@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import helmet from 'helmet';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { CopilotClient } from '@github/copilot-sdk';
@@ -22,6 +23,8 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+app.use(helmet()); // Add Helmet middleware for security headers
 
 app.use(express.json({
   verify: (req: any, res, buf) => {
@@ -52,10 +55,12 @@ app.post('/agent', limiter, async (req: Request, res: Response) => {
     if (!rawBody) return res.status(400).send('Missing raw body.');
 
     const hmac = crypto.createHmac('sha256', webhookSecret);
-    const digest = 'sha256=' + hmac.update(rawBody).digest('hex');
+    const digest = hmac.update(rawBody).digest('hex'); // digest is just the hex value
 
-    if (signature !== digest && signature !== `sha256=${digest}`) {
-        // Simple check for dev
+    // GitHub sends 'sha256=<hex_digest>', so we prepend 'sha256='
+    if (signature !== `sha256=${digest}`) {
+      console.warn('Webhook signature mismatch detected. Request denied.');
+      return res.status(403).send('Invalid signature.');
     }
   }
 
