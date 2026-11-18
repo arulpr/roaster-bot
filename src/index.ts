@@ -4,6 +4,16 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { CopilotClient } from '@github/copilot-sdk';
 
+let copilotClientInstance: CopilotClient | null = null;
+const clientCache = new Map<string, any>();
+
+function getCopilotClient(): CopilotClient {
+  if (!copilotClientInstance) {
+    copilotClientInstance = new CopilotClient();
+  }
+  return copilotClientInstance;
+}
+
 // Extend Express Request type properly
 declare global {
   namespace Express {
