@@ -29,6 +29,7 @@ function isValidWebhookSignature(rawBody: string | undefined, signatureHeader: s
 }
 
 // Single source of truth for the landing page: public/index.html.
+// The root route serves landingPageHtml directly; do not inline a copy of the markup.
 // Falls back to a minimal page if the file cannot be read, so module initialization never throws.
 const landingPageHtml: string = (() => {
   try {
