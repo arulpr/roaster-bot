@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import crypto from 'crypto';
+import { pathToFileURL } from 'url';
+import path from 'path';
+import { readFileSync } from 'fs';
 import rateLimit from 'express-rate-limit';
 import { CopilotClient } from '@github/copilot-sdk';
 
@@ -16,6 +19,41 @@ declare global {
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Single JSON error shape for body-parser failures, including the 1 MB limit (413).
+function jsonErrorHandler(err: any, _req: Request, res: Response, next: (err?: any) => void) {
+  if (!err) return next();
+  const status = err.status || err.statusCode || 500;
+  if (res.headersSent) return next(err);
+  res.status(status).json({ error: err.type || 'error', message: status === 413 ? 'Request body too large (max 1 MB)' : (err.expose ? err.message : 'Internal server error'), status });
+}
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+
+// Returns true only when a secret is configured and the provided signature matches the raw body HMAC.
+function isValidWebhookSignature(rawBody: string | undefined, signatureHeader: string | undefined): boolean {
+  if (!WEBHOOK_SECRET) return true;
+  if (!signatureHeader || !rawBody) return false;
+  const expected = 'sha256=' + crypto.createHmac('sha256', WEBHOOK_SECRET).update(rawBody).digest('hex');
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signatureHeader);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// Single source of truth for the landing page: public/index.html.
+// The root route serves landingPageHtml directly; do not inline a copy of the markup.
+// Falls back to a minimal page if the file cannot be read, so module initialization never throws.
+const landingPagePath = new URL('../public/index.html', import.meta.url);
+// Startup-safe loader: logs the resolved path and error, and marks the fallback so it is identifiable.
+const landingPageHtml: string = (() => {
+  try {
+    return readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  } catch (err) {
+    console.error('Failed to load public/index.html; using fallback landing page.', err);
+    return '<!DOCTYPE html><html><body><h1>The Roaster is Online</h1></body></html>';
+  }
+})();
+// True only when this module is run directly (dev/start), not when imported by the serverless entry in api/index.ts.
+const isDirectRun = process.argv[1] !== undefined && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 100,
@@ -24,8 +62,14 @@ const limiter = rateLimit({
 });
 
 app.use(express.json({
-  verify: (req: any, res, buf) => {
-    req.rawBody = buf.toString();
+  verify: (req: Request, _res: Response, buf: Buffer) => {
+    if (buf.length > 1 * 1024 * 1024) {
+      const err: Error & { status?: number; type?: string } = new Error('Request body too large');
+      err.status = 413;
+      err.type = 'entity.too.large';
+      throw err;
+    }
+    req.rawBody = buf.toString('utf8');
   }
 }));
 
