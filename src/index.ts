@@ -5,7 +5,19 @@ import rateLimit from 'express-rate-limit';
 import { CopilotClient } from '@github/copilot-sdk';
 
 let copilotClientInstance: CopilotClient | null = null;
-const clientCache = new Map<string, any>();
+// Bounded LRU-style cache or size-limited map to prevent memory leaks
+const clientCache = new Map<string, { data: any; timestamp: number }>();
+const MAX_CACHE_SIZE = 100;
+
+function setCachedItem(key: string, value: any) {
+  if (clientCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = clientCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      clientCache.delete(oldestKey);
+    }
+  }
+  clientCache.set(key, { data: value, timestamp: Date.now() });
+}
 
 function getCopilotClient(): CopilotClient {
   if (!copilotClientInstance) {
