@@ -15,6 +15,8 @@ declare global {
 
 const app = express();
 const port = process.env.PORT || 3000;
+// True only when this module is run directly (dev/start), not when imported by the serverless entry in api/index.ts.
+const isDirectRun = process.argv[1] !== undefined && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -24,8 +26,14 @@ const limiter = rateLimit({
 });
 
 app.use(express.json({
-  verify: (req: any, res, buf) => {
-    req.rawBody = buf.toString();
+  verify: (req: Request, _res: Response, buf: Buffer) => {
+    if (buf.length > 1 * 1024 * 1024) {
+      const err: Error & { status?: number; type?: string } = new Error('Request body too large');
+      err.status = 413;
+      err.type = 'entity.too.large';
+      throw err;
+    }
+    req.rawBody = buf.toString('utf8');
   }
 }));
 
