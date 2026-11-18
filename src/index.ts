@@ -16,6 +16,17 @@ declare global {
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Single source of truth for the landing page: public/index.html.
+// Falls back to a minimal page if the file cannot be read, so module initialization never throws.
+const landingPageHtml: string = (() => {
+  try {
+    return readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  } catch (err) {
+    console.error('Failed to load public/index.html; using fallback landing page.', err);
+    return '<!DOCTYPE html><html><body><h1>The Roaster is Online</h1></body></html>';
+  }
+})();
 // True only when this module is run directly (dev/start), not when imported by the serverless entry in api/index.ts.
 const isDirectRun = process.argv[1] !== undefined && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 
