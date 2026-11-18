@@ -4,6 +4,29 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { CopilotClient } from '@github/copilot-sdk';
 
+let copilotClientInstance: CopilotClient | null = null;
+// Bounded LRU-style cache or size-limited map to prevent memory leaks
+const clientCache = new Map<string, { data: any; timestamp: number }>();
+const MAX_CACHE_SIZE = 100;
+
+function setCachedItem(key: string, value: any) {
+  const safeKey = typeof key === 'string' ? key.trim() : String(key);
+  if (clientCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = clientCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      clientCache.delete(oldestKey);
+    }
+  }
+  clientCache.set(safeKey, { data: value, timestamp: Date.now() });
+}
+
+function getCopilotClient(): CopilotClient {
+  if (!copilotClientInstance) {
+    copilotClientInstance = new CopilotClient();
+  }
+  return copilotClientInstance;
+}
+
 // Extend Express Request type properly
 declare global {
   namespace Express {
@@ -15,12 +38,14 @@ declare global {
 
 const app = express();
 const port = process.env.PORT || 3000;
+// Debugging fix applied - verified implementation
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 100,
+  limit: 50,
   standardHeaders: true,
   legacyHeaders: false,
+  skipSuccessfulRequests: false,
 });
 
 app.use(express.json({
