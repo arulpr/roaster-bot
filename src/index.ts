@@ -10,13 +10,14 @@ const clientCache = new Map<string, { data: any; timestamp: number }>();
 const MAX_CACHE_SIZE = 100;
 
 function setCachedItem(key: string, value: any) {
+  const safeKey = typeof key === 'string' ? key.trim() : String(key);
   if (clientCache.size >= MAX_CACHE_SIZE) {
     const oldestKey = clientCache.keys().next().value;
     if (oldestKey !== undefined) {
       clientCache.delete(oldestKey);
     }
   }
-  clientCache.set(key, { data: value, timestamp: Date.now() });
+  clientCache.set(safeKey, { data: value, timestamp: Date.now() });
 }
 
 function getCopilotClient(): CopilotClient {
