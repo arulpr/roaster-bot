@@ -15,6 +15,8 @@ declare global {
 
 const app = express();
 const port = process.env.PORT || 3000;
+// True only when this module is run directly (dev/start), not when imported by the serverless entry in api/index.ts.
+const isDirectRun = process.argv[1] !== undefined && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
