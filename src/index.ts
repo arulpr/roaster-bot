@@ -5,6 +5,8 @@ import rateLimit from 'express-rate-limit';
 import { CopilotClient } from '@github/copilot-sdk';
 
 let copilotClientInstance: CopilotClient | null = null;
+const clientCache = new Map<string, any>();
+
 function getCopilotClient(): CopilotClient {
   if (!copilotClientInstance) {
     copilotClientInstance = new CopilotClient();
