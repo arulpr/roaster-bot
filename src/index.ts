@@ -31,6 +31,8 @@ function isValidWebhookSignature(rawBody: string | undefined, signatureHeader: s
 // Single source of truth for the landing page: public/index.html.
 // The root route serves landingPageHtml directly; do not inline a copy of the markup.
 // Falls back to a minimal page if the file cannot be read, so module initialization never throws.
+const landingPagePath = new URL('../public/index.html', import.meta.url);
+// Startup-safe loader: logs the resolved path and error, and marks the fallback so it is identifiable.
 const landingPageHtml: string = (() => {
   try {
     return readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
