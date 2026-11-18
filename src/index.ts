@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import crypto from 'crypto';
+import { readFileSync } from 'fs';
 import rateLimit from 'express-rate-limit';
 import { CopilotClient } from '@github/copilot-sdk';
 
@@ -16,6 +17,19 @@ declare global {
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Single source of truth for the landing page: public/index.html.
+// Falls back to a minimal page if the file cannot be read, so module initialization never throws.
+const landingPageHtml: string = (() => {
+  try {
+    return readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  } catch (err) {
+    console.error('Failed to load public/index.html; using fallback landing page.', err);
+    return '<!DOCTYPE html><html><body><h1>The Roaster is Online</h1></body></html>';
+  }
+})();
+// True only when this module is run directly (dev/start), not when imported by the serverless entry in api/index.ts.
+const isDirectRun = process.argv[1] !== undefined && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 100,
@@ -24,8 +38,14 @@ const limiter = rateLimit({
 });
 
 app.use(express.json({
-  verify: (req: any, res, buf) => {
-    req.rawBody = buf.toString();
+  verify: (req: Request, _res: Response, buf: Buffer) => {
+    if (buf.length > 1 * 1024 * 1024) {
+      const err: Error & { status?: number; type?: string } = new Error('Request body too large');
+      err.status = 413;
+      err.type = 'entity.too.large';
+      throw err;
+    }
+    req.rawBody = buf.toString('utf8');
   }
 }));
 
