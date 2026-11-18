@@ -18,6 +18,14 @@ declare global {
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+// Single JSON error shape for body-parser failures, including the 1 MB limit (413).
+function jsonErrorHandler(err: any, _req: Request, res: Response, next: (err?: any) => void) {
+  if (!err) return next();
+  const status = err.status || err.statusCode || 500;
+  if (res.headersSent) return next(err);
+  res.status(status).json({ error: err.type || 'error', message: status === 413 ? 'Request body too large (max 1 MB)' : (err.expose ? err.message : 'Internal server error'), status });
+}
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
 // Returns true only when a secret is configured and the provided signature matches the raw body HMAC.
