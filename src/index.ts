@@ -16,6 +16,17 @@ declare global {
 
 const app = express();
 const port = process.env.PORT || 3000;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+
+// Returns true only when a secret is configured and the provided signature matches the raw body HMAC.
+function isValidWebhookSignature(rawBody: string | undefined, signatureHeader: string | undefined): boolean {
+  if (!WEBHOOK_SECRET) return true;
+  if (!signatureHeader || !rawBody) return false;
+  const expected = 'sha256=' + crypto.createHmac('sha256', WEBHOOK_SECRET).update(rawBody).digest('hex');
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signatureHeader);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 // Single source of truth for the landing page: public/index.html.
 // Falls back to a minimal page if the file cannot be read, so module initialization never throws.
