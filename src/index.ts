@@ -25,7 +25,9 @@ const limiter = rateLimit({
 
 app.use(express.json({
   verify: (req: any, res, buf) => {
-    req.rawBody = buf.toString();
+    if (req.headers['x-hub-signature-256']) {
+      req.rawBody = buf.toString();
+    }
   }
 }));
 
