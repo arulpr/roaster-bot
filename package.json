@@ -5,8 +5,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node-esm src/index.ts",
-    "dev": "ts-node-esm src/index.ts",
+    "start": "node --import tsx src/index.ts",
+    "dev": "node --import tsx --watch src/index.ts",
     "test": "node --test"
   },
   "keywords": [],
@@ -19,7 +19,7 @@
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
     "openai": "^6.22.0",
-    "ts-node": "^10.9.2"
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
