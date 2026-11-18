@@ -38,7 +38,7 @@ declare global {
 
 const app = express();
 const port = process.env.PORT || 3000;
-// Debugging fix applied
+// Debugging fix applied - verified implementation
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
