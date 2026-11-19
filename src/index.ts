@@ -47,80 +47,55 @@ app.post('/agent', limiter, async (req: Request, res: Response) => {
   const signature = req.get('X-Hub-Signature-256');
   const webhookSecret = process.env.WEBHOOK_SECRET;
 
-  if (webhookSecret && signature) {
+  if (webhookSecret) {
+    if (!signature) {
+      return res.status(401).send('Missing signature.');
+    }
     const rawBody = req.rawBody;
     if (!rawBody) return res.status(400).send('Missing raw body.');
 
     const hmac = crypto.createHmac('sha256', webhookSecret);
     const digest = 'sha256=' + hmac.update(rawBody).digest('hex');
 
-    if (signature !== digest && signature !== `sha256=${digest}`) {
-        // Simple check for dev
+    try {
+      const sigBuffer = Buffer.from(signature);
+      const digestBuffer = Buffer.from(digest);
+      if (sigBuffer.length !== digestBuffer.length || !crypto.timingSafeEqual(sigBuffer, digestBuffer)) {
+        return res.status(401).send('Invalid signature.');
+      }
+    } catch (e) {
+      return res.status(401).send('Invalid signature.');
     }
   }
 
-  const token = req.get('X-GitHub-Token');
-  if (!token) return res.status(401).send('Missing X-GitHub-Token.');
+  const { prompt, repoContext } = req.body;
 
-  // Initialize client with the user's token
-  const client = new CopilotClient({
-    env: {
-      GITHUB_TOKEN: token,
-      ...process.env
-    }
-  });
-  
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required' });
+  }
+
   try {
-    const systemPrompt = `
-      You are 'The Roaster' 🌶️💀.
-      Your goal is to DESTROY the user's self-esteem by roasting their code.
-      
-      CORE DIRECTIVES:
-      1. RATING: ALWAYS start with a rating out of 10. NEVER go above 2/10.
-      2. TONE: Ruthless, savage, Gen Z, toxic (L, ratio, no cap, skill issue).
-      3. NO HELPFULNESS: Do NOT fix their code. Mock them instead.
-    `;
-
-    const userMessages = req.body.messages || [];
-    const lastMessage = userMessages.filter((m: any) => m.role === 'user').pop();
-    const prompt = lastMessage ? lastMessage.content : "Roast me.";
-
-    // Create session following SDK docs
-    const session = await client.createSession({
-      model: "gpt-4o",
-      streaming: true,
-      systemMessage: {
-        mode: "replace",
-        content: systemPrompt
-      }
+    const copilot = new CopilotClient();
+    const session = await copilot.createSession({
+      model: 'claude-3.5-sonnet',
+      systemPrompt: 'You are an elite, brutally honest code reviewer and refactoring expert. Your job is to roast code unmercifully, then fix it with surgical precision.'
     });
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    const response = await session.send(`Review and roast this code/context:
 
-    session.on((event: any) => {
-      if (event.type === "assistant.message_delta") {
-        const chunk = {
-          choices: [{ delta: { content: event.data.deltaContent } }]
-        };
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-      }
+Prompt: ${prompt}
+Context: ${JSON.stringify(repoContext || {})}`);
+
+    res.json({
+      status: 'success',
+      roastAndFix: response.content
     });
-
-    await session.sendAndWait({ prompt });
-
-    res.write('data: [DONE]\n\n');
-    res.end();
-
-  } catch (error) {
-    console.error('Error:', error);
-    if (!res.headersSent) res.status(500).send("The roaster overheated.");
-  } finally {
-    await client.stop();
+  } catch (error: any) {
+    console.error('Agent error:', error);
+    res.status(500).json({ error: 'Internal agent error', details: error.message });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Server running on ${port}`);
+  console.log(`🔥 The Roaster is listening on port ${port}`);
 });
